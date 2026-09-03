@@ -64,5 +64,24 @@ class OptimizeAraTest(absltest.TestCase):
                                answer.clipping_thresholds[0])
         self.assertAlmostEqual(baseline_output.error, answer.error)
 
+    def test_initial_value_zero_quantile(self):
+        dataset = dataset_evaluation.ARADataset(
+            pd.DataFrame({"A": [0] * 100}), [], ["A"], "")
+        initial_value = [1, math.log2(1.0)]
+        objective = optimize_ara.ARAObjective(dataset, [], 1.0)
+        for a, b in zip(objective.initial_value(), initial_value):
+            self.assertAlmostEqual(a, b)
+
+    def test_optimize_ara_all_zero_column(self):
+        dataset = dataset_evaluation.ARADataset(
+            pd.DataFrame({"A": [0.0] * 100, "C": [1.0] * 100, "slice": [1] * 100}),
+            ["slice"], ["A"], "C")
+        privacy_budget = 1.0
+        optimization_output = optimize_ara.optimize_ara(
+            dataset, dataset, [metrics.RMSEMetric()] * 2, privacy_budget)
+        self.assertAlmostEqual(optimization_output.contribution_budgets[0], 1.0)
+        self.assertLess(optimization_output.clipping_thresholds[0], 1.0)
+        self.assertFalse(math.isnan(optimization_output.error))
+
 if __name__ == "__main__":
   absltest.main()

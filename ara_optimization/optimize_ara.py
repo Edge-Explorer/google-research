@@ -33,16 +33,21 @@ class ARAObjective:
     """Choose initial value of hyperparameters before optimization.
 
     The initial hyperparameters are an equal split of the contribution budget
-    and clipping thresholds equal to the 99% quantile of each column. Note that
-    the clipping thresholds are stored in a logarithmic representation.
+    and clipping thresholds equal to the 99% quantile of each column (or 1.0
+    if the quantile is <= 0). Note that the clipping thresholds are stored in a
+    logarithmic representation.
 
     Returns:
       A suggested initial hyperparameter setting before optimization
     """
     num_features = len(self.dataset.value_columns)
     contribution_budgets = [1 / num_features] * num_features
-    clipping_thresholds = [self.dataset.df[col].quantile(0.99) for
-                           col in self.dataset.value_columns]
+    clipping_thresholds = [
+        self.dataset.df[col].quantile(0.99)
+        if self.dataset.df[col].quantile(0.99) > 0
+        else 1.0
+        for col in self.dataset.value_columns
+    ]
     return _combine_hyperparameters(contribution_budgets, clipping_thresholds)
 
   def evaluate_objective(self, hyperparameters):
