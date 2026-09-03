@@ -112,6 +112,9 @@ class DetectionTrainer(trainers_base.TrainerStrategy):
 
     training_args = transformers.Seq2SeqTrainingArguments(
         output_dir=str(resolved_output_path),
+        ddp_find_unused_parameters=cfg.training.get(
+            "ddp_find_unused_parameters", True
+        ),
         per_device_train_batch_size=cfg.training.batch_size,
         per_device_eval_batch_size=cfg.eval.eval_batch_size,
         num_train_epochs=cfg.training.num_train_epochs,
@@ -120,6 +123,7 @@ class DetectionTrainer(trainers_base.TrainerStrategy):
         remove_unused_columns=False,
         push_to_hub=False,
         dataloader_pin_memory=(device.type != "tpu"),
+        dataloader_num_workers=cfg.training.get("dataloader_num_workers", 4),
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
         report_to="tensorboard",
         logging_dir=str(resolved_output_path),
@@ -216,8 +220,25 @@ class DetectionTrainer(trainers_base.TrainerStrategy):
 
       start_time = time.monotonic()
       if not cfg.eval.get("run_eval_only", False):
-        logging.info("Starting training...")
-        custom_trainer.train(resume_from_checkpoint=False)
+        resume_setting = cfg.training.get("resume_from_checkpoint", "auto")
+        resume_setting_str = str(resume_setting).lower()
+        if resume_setting_str == "auto" or resume_setting_str == "true":
+          existing_checkpoints = list(resolved_output_path.glob("checkpoint-*"))
+          resume_from_checkpoint = True if existing_checkpoints else False
+        elif isinstance(resume_setting, str) and resume_setting not in (
+            "auto",
+            "false",
+            "False",
+        ):
+          resume_from_checkpoint = resume_setting
+        else:
+          resume_from_checkpoint = False
+
+        logging.info(
+            "Starting training (resume_from_checkpoint=%s)...",
+            resume_from_checkpoint,
+        )
+        custom_trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
       else:
         logging.info("Skipping training as run_eval_only is set to True.")
